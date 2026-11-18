@@ -4,9 +4,9 @@
 your browser, with Google Maps integration so that you can see your
 running or cycling tracks on a map.
 
-![Fit Browser Overview](https://github.com/Jomolungma/FitBrowser/blob/main/Fit Browser Overview.jpg)
+![Fit Browser Overview](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Overview.jpg)
 
-![Fit Browser Activity](https://github.com/Jomolungma/FitBrowser/blob/main/Fit Browser Activity.jpg)
+![Fit Browser Activity](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Activity.jpg)
 
 # Background
 
@@ -52,7 +52,7 @@ See below for more details.
     Browser** from the Python Package Index.
 - Afterwards, you can run `fitbrowser` or `python -m fitbrowser` in a console.
 
-# Set-Up
+# Set Up
 
 **Fit Browser** depends on two online services that are free to use,
 Google Maps and Geonames.
@@ -61,8 +61,8 @@ Google Maps and Geonames.
 
 For Google Maps integration, you need a
 [Maps Demo Key](https://developers.google.com/maps/documentation/javascript/demo-key)
-from Google. This requires a private Google account, but no billing
-information.
+from Google. This requires a private Google account. Billing information
+is not necessary.
 
 In the **Fit Browser** user interface, go to `Google Maps ...` in the
 `Options` menu and enter your Maps Demo Key.
@@ -86,7 +86,7 @@ address).
   235 device to a PC, these files show up in the device's `ACTIVITY`
   folder.
 - Garmin Training Center files (`*.tcx`).
-- Sport Tracks Logbook files (`*.logbook3*`).
+- Sport Tracks Logbook files (`*.logbook3`).
 - ZIP files containing any combination of the above.
 
 After loading an activity file, the GUI shows the word **Loaded** in green.
@@ -184,7 +184,7 @@ If the map does not show, then the Google Maps API key is incorrect.
 See `Set-Up` above.
 
 If locations are shown as numerical latitude and longitude values,
-then the Geonames user name is incorrect. See `Set-Up` above.
+then the Geonames user name is incorrect. See `Set Up` above.
 
 # Local Processing
 
@@ -196,6 +196,5 @@ locations and are processed using Google's cloud services. While Google
 will not know your tracks, it will know what parts of the world you are
 looking at.
 
-Likewise, Geonames will know, and is able to associate with your account,
-the locations that **Fit Browser** is looking up -- i.e., the start
-locations of your activities.
+Likewise, Geonames will know the locations that **Fit Browser** is
+looking up -- i.e., the start locations of your activities.
