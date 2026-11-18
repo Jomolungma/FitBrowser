@@ -1,0 +1,31 @@
+[build-system]
+requires = [ "setuptools" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fitbrowser"
+version = "0.0.1"
+description = "Fit Browser"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = [ "LICENSE.txt" ]
+dependencies = [ "garmin_fit_sdk", "pyperclip", "tkinterdnd2" ]
+
+[project.optional-dependencies]
+tests = ["pytest", "pytest-cov", "html5lib"]
+
+[project.scripts]
+wacb-cli = "fitbrowser:runCli"
+
+[project.gui-scripts]
+wacb = "fitbrowser:runUi"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["test", "gmt" ]
+
+[tool.setuptools.package-data]
+fitbrowser = ["fitbrowser.css", "activity.js", "overview.js"]
