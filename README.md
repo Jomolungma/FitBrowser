@@ -5,7 +5,6 @@ your browser, with Google Maps integration so that you can see your
 running or cycling tracks on a map.
 
 ![Fit Browser Overview](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Overview.jpg)
-
 ![Fit Browser Activity](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Activity.jpg)
 
 # Background
