@@ -1,8 +1,8 @@
 # Fit Browser
 
-**Fit Browser** loads your fitness activities and renders them in
-your browser, with Google Maps integration so that you can see your
-running or cycling tracks on a map.
+**Fit Browser** loads your fitness activities and renders their GPS
+tracks in your browser, with Google Maps integration, so that you can
+see your running or cycling tracks on a map.
 
 ![Fit Browser Overview](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Overview.jpg)
 ![Fit Browser Activity](https://github.com/Jomolungma/FitBrowser/blob/main/Fit_Browser_Activity.jpg)
@@ -12,8 +12,8 @@ running or cycling tracks on a map.
 I got robbed! Once upon a time, I paid for a license of Sport Tracks,
 a software that imported all of my activities into a local database,
 and allowed me to browse them, and to see them on a map. Eventually,
-the publisher introduced a new version where all your activities were
-uploaded to their cloud. I did not like that but kept using the
+the publisher introduced a new version where all activities were
+uploaded to their cloud. I did not like that and kept using the
 legacy software version. I had paid for a perpetual license, after all.
 But then the publisher published a mandatory "security update", which
 did nothing for security but first showed a big, red banner at the top
@@ -86,6 +86,7 @@ address).
   folder.
 - Garmin Training Center files (`*.tcx`).
 - Sport Tracks Logbook files (`*.logbook3`).
+- Apple Health data exported as XML files (`*.gpx`).
 - ZIP files containing any combination of the above.
 
 After loading an activity file, the GUI shows the word **Loaded** in green.
@@ -190,10 +191,8 @@ then the Geonames user name is incorrect. See `Set Up` above.
 **Fit Browser** processes your activity files locally, in memory, on
 the fly.
 
-Of course, the integration with Google Maps requires that your activity
-locations and are processed using Google's cloud services. While Google
-will not know your tracks, it will know what parts of the world you are
-looking at.
+The integration with Google Maps means that Google will know what
+parts of the world you are looking at.
 
 Likewise, Geonames will know the locations that **Fit Browser** is
 looking up -- i.e., the start locations of your activities.

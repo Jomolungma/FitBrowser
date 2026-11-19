@@ -4,7 +4,7 @@ all: dist
 
 exe:
 	pyinstaller --onefile --windowed \
-		--add-data fitbrowser/index.css:fitbrowser \
+		--add-data fitbrowser/fitbrowser.css:fitbrowser \
 		--add-data fitbrowser/activity.js:fitbrowser \
 		--add-data fitbrowser/overview.js:fitbrowser \
 		fitbrowser.py
