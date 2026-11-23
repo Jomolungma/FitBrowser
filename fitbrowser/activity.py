@@ -20,6 +20,8 @@
   activities that start between two dates/times.
 - ActivitiesGroupedByLocation: wraps any of the above, sorting its
   activities into groups of nearby start locations.
+- LocationSet: a set of lat/lng locations that leaves out any location
+  within a given distance of one already in it.
 - open_activities(path): picks whichever of the classes above matches
   path's extension (.fit / .zip / .tcx / .logbook3 / .gpx).
 
@@ -829,13 +831,15 @@ class FitActivity(Activities):
     ZippedActivities or MergedActivities delegates here.
     """
 
-    def __init__(self, source, name=None):
+    def __init__(self, source, name=None, callback=None):
         """source: a path (str/os.PathLike) to a .FIT file, or an
         already-open binary stream - a file object, a zipfile.ZipExtFile,
         or anything else Stream.from_buffered_reader accepts.
         name: identifier for this activity (summarize_activity's 'id', and
         used in error messages); defaults to the path, or to the stream's
         own `name` attribute if it has one.
+        callback: if not None, called with the Activity once it has been
+        loaded (not called if it has no determinable start time).
         """
         if isinstance(source, (str, os.PathLike)):
             self.name = name if name is not None else str(source)
@@ -851,6 +855,8 @@ class FitActivity(Activities):
         self.start_lng = self._semicircles_to_degrees(start_lng)
 
         super().__init__([self.start_time] if self.start_time is not None else [])
+        if callback is not None and self.start_time is not None:
+            callback(Activity(self, self.start_time))
 
     def summarize_activity(self, timestamp):
         """Summary dict for this activity: id, timestamp, sport,
@@ -1091,7 +1097,7 @@ class TcxActivities(Activities):
     # matching the FIT-side convention (see KNOWN_SPORTS above).
     SPORT_MAP = {'Running': 'running', 'Biking': 'cycling'}
 
-    def __init__(self, source, name=None):
+    def __init__(self, source, name=None, callback=None):
         """Load and fully parse every activity in a .tcx file. Memory usage
         is not a concern here, unlike the previous iterparse-based version -
         the whole file is parsed up front.
@@ -1099,6 +1105,8 @@ class TcxActivities(Activities):
         a zipfile.ZipExtFile).
         name: identifier for the file; defaults to the path, or to the
         stream's own `name` attribute if it has one.
+        callback: if not None, called with each Activity as soon as it has
+        been parsed (skipped/excluded activities are not reported).
         """
         self.name = name if name is not None else (
             str(source) if isinstance(source, (str, os.PathLike)) else getattr(source, 'name', None))
@@ -1119,6 +1127,8 @@ class TcxActivities(Activities):
                 print(f'warning: activity {activity_id} starts at the same time as another one, excluding it', file=sys.stderr)
                 continue
             self._activities[start_time] = activity
+            if callback is not None:
+                callback(Activity(self, start_time))
 
         super().__init__(sorted(self._activities.keys()))
 
@@ -1360,7 +1370,7 @@ class Logbook3Activities(Activities):
     # <TrackData version="4"> timestamps count seconds from this epoch, UTC.
     TRACK_EPOCH = datetime(1990, 1, 1, tzinfo=timezone.utc)
 
-    def __init__(self, source, name=None):
+    def __init__(self, source, name=None, callback=None):
         """Load and fully parse every activity in a .logbook3 file. Memory
         usage is not a concern - the whole file is parsed up front, GPS
         routes included.
@@ -1368,6 +1378,8 @@ class Logbook3Activities(Activities):
         (e.g. a zipfile.ZipExtFile).
         name: identifier for the file; defaults to the path, or to the
         stream's own `name` attribute if it has one.
+        callback: if not None, called with each Activity as soon as it has
+        been parsed (skipped/excluded activities are not reported).
         """
         self.name = name if name is not None else (
             str(source) if isinstance(source, (str, os.PathLike)) else getattr(source, 'name', None))
@@ -1388,6 +1400,8 @@ class Logbook3Activities(Activities):
                 print(f'warning: activity {activity_id} starts at the same time as another one, excluding it', file=sys.stderr)
                 continue
             self._activities[start_time] = activity
+            if callback is not None:
+                callback(Activity(self, start_time))
 
         super().__init__(sorted(self._activities.keys()))
 
@@ -1641,7 +1655,7 @@ class AppleHealthActivity(Activities):
     # folder of routes reads its export only once (see _find_heart_rate).
     _export_cache = {}
 
-    def __init__(self, source, name=None, heart_rate=None):
+    def __init__(self, source, name=None, heart_rate=None, callback=None):
         """source: a path (str/os.PathLike) to a .gpx file, or an
         already-open file object (e.g. a zipfile.ZipExtFile).
         name: identifier for this activity (summarize_activity's 'id', and
@@ -1653,6 +1667,8 @@ class AppleHealthActivity(Activities):
         folder and the one above it (Apple's export puts the routes in a
         workout-routes/ subfolder next to export.xml); without one, every
         record's heart_rate is None.
+        callback: if not None, called with the Activity once it has been
+        loaded (not called if the route has no points).
         """
         if isinstance(source, (str, os.PathLike)):
             self.name = name if name is not None else str(source)
@@ -1696,6 +1712,8 @@ class AppleHealthActivity(Activities):
             self._heart_rate = heart_rate[first:last]
 
         super().__init__([self.start_time] if self.start_time is not None else [])
+        if callback is not None and self.start_time is not None:
+            callback(Activity(self, self.start_time))
 
     def summarize_activity(self, timestamp):
         """Summary dict for this activity: id, timestamp, sport,
@@ -1893,9 +1911,11 @@ class ZippedActivities(MergedActivities):
     whole archive.
     """
 
-    def __init__(self, zip_path):
+    def __init__(self, zip_path, callback=None):
         """Load and parse every activity file in a Zip archive. Memory usage
         is not a concern - the whole archive is parsed up front.
+        callback: if not None, passed on to each entry's class, which calls
+        it with each Activity as it has been loaded.
         """
         self.zip_path = zip_path
         activities_list = []
@@ -1912,7 +1932,7 @@ class ZippedActivities(MergedActivities):
                 kwargs = {'heart_rate': heart_rate} if activity_class is AppleHealthActivity else {}
                 try:
                     with archive.open(info) as stream:
-                        activities = activity_class(stream, name=info.filename, **kwargs)
+                        activities = activity_class(stream, name=info.filename, callback=callback, **kwargs)
                 except Exception as err:
                     print(f'warning: skipping {info.filename}: {err}', file=sys.stderr)
                     continue
@@ -2169,6 +2189,73 @@ class ActivitiesGroupedByLocation:
         return nearest
 
 
+class LocationSet:
+    """A set of locations (lat, lng in degrees) in which nearby locations
+    count as the same: add() only adds a location if no location already in
+    the set lies within distance_km (great-circle distance) of it.
+    Iterating yields the (lat, lng) tuples in the order they were added;
+    len() and `in` work as for a set ((lat, lng) in s is True if a location
+    in the set lies within distance_km of it).
+
+    Locations are filed in bands of latitude distance_km wide, so add() and
+    `in` only compare against the locations in three bands rather than the
+    whole set: two points further apart in latitude than distance_km are
+    always further apart than that.
+    """
+
+    def __init__(self, distance_km):
+        """distance_km: a location within this many kilometers of one
+        already in the set is not added again. 0 means only exact duplicates
+        are left out.
+        """
+        self.distance_km = distance_km
+        self._max_distance_m = distance_km * 1000
+        # Width of a latitude band in degrees (None: one band per latitude).
+        self._band_deg = math.degrees(self._max_distance_m / EARTH_RADIUS_M) if distance_km > 0 else None
+        self._locations = []  # (lat, lng), in order added
+        self._bands = {}  # band index -> [(lat, lng), ...]
+
+    def _band(self, lat):
+        return lat if self._band_deg is None else math.floor(lat / self._band_deg)
+
+    def _nearby(self, lat, lng):
+        # The location in the set within distance_km of lat/lng, or None.
+        band = self._band(lat)
+        neighbors = (band,) if self._band_deg is None else (band - 1, band, band + 1)
+        for neighbor in neighbors:
+            for location in self._bands.get(neighbor, ()):
+                if Activities.haversine_m(location[0], location[1], lat, lng) <= self._max_distance_m:
+                    return location
+        return None
+
+    def add(self, lat, lng):
+        """Add the location lat/lng (degrees) unless one within distance_km
+        of it is already in the set. Returns True if it was added, False if
+        not.
+        """
+        if self._nearby(lat, lng) is not None:
+            return False
+        location = (lat, lng)
+        self._locations.append(location)
+        self._bands.setdefault(self._band(lat), []).append(location)
+        return True
+
+    def find(self, lat, lng):
+        """The (lat, lng) in the set that lat/lng counts as a duplicate of,
+        i.e. one within distance_km of it - or None if there is none.
+        """
+        return self._nearby(lat, lng)
+
+    def __contains__(self, location):
+        return self._nearby(*location) is not None
+
+    def __iter__(self):
+        return iter(self._locations)
+
+    def __len__(self):
+        return len(self._locations)
+
+
 EXTENSIONS = {
     '.fit': FitActivity,
     '.zip': ZippedActivities,
@@ -2182,22 +2269,27 @@ EXTENSIONS = {
 ZIPPED_EXTENSIONS = {ext: cls for ext, cls in EXTENSIONS.items() if cls is not ZippedActivities}
 
 
-def open_activities(path):
+def open_activities(path, callback=None):
     """Return an instance of whichever Activities class matches path's
     extension (see EXTENSIONS: .fit / .zip / .tcx / .logbook3 / .gpx) - or, if
     path is a list of two or more paths, a MergedActivities combining all
     of their activities into a single timeline. A list of exactly one path
     is treated the same as passing that path directly.
+    callback: if not None, called with each Activity (wrapping the
+    per-file container it was loaded into) as soon as it has been loaded -
+    e.g. to report progress while a large file or archive loads. With
+    several paths, an activity duplicated across files is reported for
+    each file, though the merged timeline keeps only the first.
     Raises ValueError for an unrecognized extension.
     """
     if isinstance(path, (list, tuple)):
         if len(path) == 1:
-            return open_activities(path[0])
-        return MergedActivities([open_activities(p) for p in path])
+            return open_activities(path[0], callback)
+        return MergedActivities([open_activities(p, callback) for p in path])
 
     ext = os.path.splitext(path)[1].lower()
     activity_class = EXTENSIONS.get(ext)
     if activity_class is None:
         expected = ', '.join(sorted(EXTENSIONS))
         raise ValueError(f'Unsupported file type "{ext}" for {path} (expected one of: {expected})')
-    return activity_class(path)
+    return activity_class(path, callback=callback)

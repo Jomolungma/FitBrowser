@@ -57,6 +57,7 @@ class FitConfig:
 
     defaultConfig = {
         "autostart": False,
+        "autoopen": False,
         "groupRadiusKm": 10.0,
         "html": {
             "builtinCss": True,
@@ -64,7 +65,7 @@ class FitConfig:
         },
         "http": {
             "hostName": "localhost",
-            "portNumber": 8000
+            "portNumber": 0
         },
         "geonames": {
             "userName": "",
@@ -149,6 +150,7 @@ class FitConfig:
         self.merge(data)
 
     def merge(self, data):
+        self.mergeValues(self.config, data, ["autostart", "autoopen", "groupRadiusKm"])
         for toplevel in ["html", "http", "geonames", "googleMaps"]:
             self.mergeToplevel(data, toplevel)
         if "locationCache" in data:

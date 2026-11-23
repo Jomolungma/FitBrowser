@@ -115,7 +115,7 @@ Browser` from the `Server` menu.
   - `Copy URL to Clipboard` Copy the URL to the clipboard. You can then
     paste the URL into your favorite browser's address bar.
   - `Open URL in Browser` Starts your default browser, or opens a new
-    tab in your default browser, and opens your chat history.
+    tab in your default browser, and opens the activity overview.
 
 # Options
 
@@ -123,7 +123,9 @@ The `Options` menu has the following options. Note that the `Options`
 menu is disabled when the built-in Web server is running.
 
 - `Autostart` Automatically start the built-in Web server immediately
-  after loading a chat archive.
+  after loading an activity file.
+- `Autoopen` Automatically open the activity overview page in a Web
+  browser after starting the web server.
 - `HTML` Options related to the HTML rendering.
 - `Style Sheet`
   - `Built-In` Use the built-in style sheet for formatting.
@@ -149,6 +151,13 @@ menu is disabled when the built-in Web server is running.
 - `Geonames` Configures the Geonames user name and database.
   For valid database names, see the `cities` parameter
   [here](https://www.geonames.org/export/web-services.html#findNearbyPlaceName).
+  `Cache Radius` is the radius for the location cache, in kilometers. When a
+  new location is within this radius of a known location, it is not looked up
+  again.
+- `Other` Configures miscellaneous other options.
+  - `Group Radius` In the overview map, locations within this distance of
+    one another are grouped into a single location group, i.e., sharing the
+    same marker on the map.
 
 # Formatting
 

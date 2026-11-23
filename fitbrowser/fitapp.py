@@ -25,9 +25,11 @@ and HTTP serving -- everything except the user interface.
 import sys
 import json
 import glob
+import time
 import pkgutil
 import argparse
 import datetime
+import threading
 import urllib.parse
 from pathlib import Path
 from os import path
@@ -88,6 +90,57 @@ class ConsoleDownloadStatistics:
 
     def oops(self, message):
         print(message)
+
+class BgFileOpener:
+    def __init__(self, files, callback=None):
+        self.files = files
+        self.activities = None
+        self.success = False
+        self.thread = None
+        self.callback = callback
+        self.canceled = False
+        self.running = True
+        self.thread = threading.Thread(target=self.openActivities)
+        self.thread.start()
+        
+    def __del__(self):
+        self.close()
+
+    def __bool__(self):
+        return self.success
+
+    @property
+    def done(self):
+        return not self.running
+
+    def get(self):
+        return self.activities
+
+    def cancel(self):
+        self.canceled = True
+
+    def close(self):
+        if self.thread and self.thread != threading.current_thread():
+            self.thread.join()
+            self.thread = None
+
+    def wait(self):
+        if self.running:
+            self.close()
+
+    def openFinished(self, success):
+        self.success = success
+        self.running = False
+
+    def openActivities(self):
+        try:
+            self.activities = activity.open_activities(self.files, self.callback)
+        except Exception as e:
+            print("Oops: " + str(e))
+            self.openFinished(False)
+            return
+
+        self.openFinished(not self.canceled)
 
 class ActivitiesWrapper:
     fileList = [
@@ -316,11 +369,15 @@ class App:
         self.config.save()
 
     def open(self, files):
+        activities = activity.open_activities(files)
+        self.setActivities(activities)
+
+    def setActivities(self, activities):
         self.stop()
         self.filteredActivities = None
-        self.unfilteredActivities = activity.open_activities(files)
+        self.unfilteredActivities = activities
         self.groupedActivities = activity.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
-
+        
     def close(self):
         self.stop()
         self.filteredActivities = None
@@ -366,6 +423,29 @@ class App:
         self.running = False
         self.updateConfiguration()
 
+class ConsoleFileOpener(BgFileOpener):
+    updatePeriodMs = 200
+
+    def __init__(self, files, verbosity):
+        self.verbosity = verbosity
+        self.count = 0
+        self.lastActivity = time.time()
+        if self.verbosity > 0:
+            print("Loading activities ... ", end="\r", flush=True)
+        super().__init__(files, self.activityLoaded)
+
+    def activityLoaded(self, activity):
+        self.count += 1
+        if self.verbosity > 1:
+            now = time.time()
+            if ((now - self.lastActivity) * 1000) >= ConsoleFileOpener.updatePeriodMs:
+                print(f"Loading activities ... {self.count} ", end="\r", flush=True)
+                self.lastActivity = now
+
+    def done(self):
+        if self.verbosity > 0:
+            print(f"Loading activities ... done, {self.count} activities loaded.")
+
 #
 # Allow to run from the command line.
 #
@@ -378,7 +458,11 @@ def run(activityFiles=None, title=None, useConfigFile=True, configFile=None, ver
     app = App(useConfigFile, configFile)
     if verbosity > 0:
         app.setStatisticsCollector(ConsoleDownloadStatistics())
-    app.open(activityFiles)
+    cfo = ConsoleFileOpener(activityFiles, verbosity)
+    cfo.wait()
+    cfo.done()
+    activities = cfo.get()
+    app.setActivities(activities)
     if title:
         app.title = title
     app.start()

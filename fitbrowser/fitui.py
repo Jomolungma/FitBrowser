@@ -5,6 +5,7 @@ The GUI.
 """
 
 import datetime
+import webbrowser
 import threading
 import tkinter
 import tkinter.filedialog
@@ -12,11 +13,13 @@ from tkinter import ttk, font
 from pathlib import Path
 
 if __package__ == "fitbrowser":
+    from . import activity
     from . import fitapp
     from . import fitcss
     from . import fitkey
     from . import fitgeo
 else:
+    import activity
     import fitapp
     import fitcss
     import fitkey
@@ -244,13 +247,14 @@ class GeonamesConfigurator(tkinter.Toplevel):
     Top-level window for Geonames configuration.
     """
 
-    def __init__(self, parent, currentUserName=None, currentDatabase=None):
+    def __init__(self, parent, currentUserName=None, currentDatabase=None, currentCacheRadiusKm=None):
         super().__init__(parent.top)
         self.success = False
         self.parent = parent
         self.top = self.parent.top
         self.userName = tkinter.StringVar()
         self.database = tkinter.StringVar()
+        self.cacheRadiusKm = tkinter.StringVar()
         self.statusMessage = tkinter.StringVar()
         self.widgets = dict()
         self.createWidgets()
@@ -263,6 +267,10 @@ class GeonamesConfigurator(tkinter.Toplevel):
             self.database.set(currentDatabase)
         else:
             self.database.set("")
+        if currentCacheRadiusKm:
+            self.cacheRadiusKm.set(str(currentCacheRadiusKm))
+        else:
+            self.cacheRadiusKm.set("")
 
     def __bool__(self):
         return self.success
@@ -283,6 +291,13 @@ class GeonamesConfigurator(tkinter.Toplevel):
         databaseLabel.pack(side="left", padx=10)
         databaseEntry.pack(side="left", fill="x", expand="yes", padx=10)
         databaseFrame.pack(side="top", fill="x")
+
+        cacheRadiusKmFrame = ttk.Frame(self)
+        cacheRadiusKmLabel = ttk.Label(cacheRadiusKmFrame, text="Cache Radius", width=12, font=self.parent.defaultFont)
+        cacheRadiusKmEntry = ttk.Entry(cacheRadiusKmFrame, width=30, textvariable=self.cacheRadiusKm)
+        cacheRadiusKmLabel.pack(side="left", padx=10)
+        cacheRadiusKmEntry.pack(side="left", fill="x", expand="yes", padx=10)
+        cacheRadiusKmFrame.pack(side="top", fill="x")
 
         buttonFrame = ttk.Frame(self)
         buttonFrameInt = ttk.Frame(buttonFrame)
@@ -329,10 +344,6 @@ class GoogleMapsConfigurator(tkinter.Toplevel):
             self.apiKey.set(currentApiKey)
         else:
             self.apiKey.set("")
-        if currentApiKey:
-            self.apiKey.set(currentApiKey)
-        else:
-            self.apiKey.set("")
 
     def __bool__(self):
         return self.success
@@ -342,7 +353,7 @@ class GoogleMapsConfigurator(tkinter.Toplevel):
 
         apiKeyFrame = ttk.Frame(self)
         apiKeyLabel = ttk.Label(apiKeyFrame, text="API Key", width=12, font=self.parent.defaultFont)
-        apiKeyEntry = ttk.Entry(apiKeyFrame, width=30, textvariable=self.apiKey)
+        apiKeyEntry = ttk.Entry(apiKeyFrame, width=40, textvariable=self.apiKey)
         apiKeyLabel.pack(side="left", padx=10)
         apiKeyEntry.pack(side="left", fill="x", expand="yes", padx=10)
         apiKeyFrame.pack(side="top", fill="x")
@@ -373,18 +384,90 @@ class GoogleMapsConfigurator(tkinter.Toplevel):
         self.grab_set()
         self.parent.top.wait_window(self)
 
+class GeneralOptionsConfigurator(tkinter.Toplevel):
+    """
+    Top-level window for configuring some general options.
+    """
+
+    def __init__(self, parent, currentGroupRadiusKm=None):
+        super().__init__(parent.top)
+        self.success = False
+        self.parent = parent
+        self.top = self.parent.top
+        self.groupRadiusKm = tkinter.StringVar()
+        self.statusMessage = tkinter.StringVar()
+        self.widgets = dict()
+        self.createWidgets()
+        self.statusMessage.set("Options Configurator")
+        if currentGroupRadiusKm:
+            self.groupRadiusKm.set(str(currentGroupRadiusKm))
+        else:
+            self.groupRadiusKm.set("")
+
+    def __bool__(self):
+        return self.success
+
+    def createWidgets(self):
+        self.title("Options Configurator")
+
+        groupRadiusKmFrame = ttk.Frame(self)
+        groupRadiusKmLabel = ttk.Label(groupRadiusKmFrame, text="Group Radius", width=12, font=self.parent.defaultFont)
+        groupRadiusKmEntry = ttk.Entry(groupRadiusKmFrame, width=40, textvariable=self.groupRadiusKm)
+        groupRadiusKmLabel.pack(side="left", padx=10)
+        groupRadiusKmEntry.pack(side="left", fill="x", expand="yes", padx=10)
+        groupRadiusKmFrame.pack(side="top", fill="x")
+
+        buttonFrame = ttk.Frame(self)
+        buttonFrameInt = ttk.Frame(buttonFrame)
+        okButton = ttk.Button(buttonFrameInt, text="OK", width=12, command=self.okButtonPressed)
+        cancelButton = ttk.Button(buttonFrameInt, text="Cancel", width=12, command=self.cancelButtonPressed)
+        okButton.pack(side="left", padx=10)
+        cancelButton.pack(side="left", padx=10)
+        buttonFrameInt.pack(side="top", expand="yes", anchor="c")
+        buttonFrame.pack(side="top", padx=10, pady=5)
+
+        statusFrame = ttk.Frame(self)
+        statusLabel = ttk.Label(statusFrame, textvariable=self.statusMessage, relief="sunken", width=40)
+        statusLabel.pack(side="left", fill="x", expand="yes")
+        statusFrame.pack(side="top", fill="x")
+
+    def okButtonPressed(self):
+        self.success = True
+        self.destroy()
+
+    def cancelButtonPressed(self):
+        self.success = False
+        self.destroy()
+
+    def run(self):
+        self.grab_set()
+        self.parent.top.wait_window(self)
+
+class UiFileOpener(fitapp.BgFileOpener):
+    def __init__(self, files, groupRadiusKm):
+        self.count = 0
+        self.locations = activity.LocationSet(groupRadiusKm)
+        super().__init__(files, self.activityLoaded)
+
+    def activityLoaded(self, activity):
+        summary = activity.summary()
+        self.count += 1
+        if summary["start_lat"] is not None and summary["start_lng"] is not None:
+            self.locations.add(summary["start_lat"], summary["start_lng"])
+
 class FitBrowser(tkinter.Frame):
     """
     The main user interface.
     """
 
-    updatePeriodMs = 1000
+    updatePeriodMs = 200
 
     def __init__(self, top, useConfigFile=True, configFile=None):
         super().__init__(top)
         self.top = top
         self.app = fitapp.App(useConfigFile, configFile)
         self.autostart = tkinter.BooleanVar()
+        self.autoopen = tkinter.BooleanVar()
         self.builtinCss = tkinter.BooleanVar()
         self.numberOfActivities = tkinter.StringVar()
         self.numberOfLocations = tkinter.StringVar()
@@ -393,6 +476,7 @@ class FitBrowser(tkinter.Frame):
         self.statusLoaded = tkinter.StringVar()
         self.statusRunning = tkinter.StringVar()
         self.statisticsCollector = None
+        self.openHelper = None
         self.widgets = {}
         self.createWidgets()
         self.setupDnd()
@@ -442,6 +526,7 @@ class FitBrowser(tkinter.Frame):
 
         optionsMenu = tkinter.Menu(menuBar, tearoff=0)
         optionsMenu.add_checkbutton(label="Autostart", variable=self.autostart, onvalue=True, offvalue=False)
+        optionsMenu.add_checkbutton(label="Autoopen", variable=self.autoopen, onvalue=True, offvalue=False)
 
         cssMenu = tkinter.Menu(optionsMenu, tearoff=0)
         cssMenu.add_checkbutton(label="Built-In", variable=self.builtinCss, onvalue=True, offvalue=False)
@@ -452,6 +537,7 @@ class FitBrowser(tkinter.Frame):
         optionsMenu.add_command(label="HTTP ...", command=self.configureHTTPFromMenu)
         optionsMenu.add_command(label="Google Maps ...", command=self.configureGoogleMapsFromMenu)
         optionsMenu.add_command(label="Geonames ...", command=self.configureGeonamesFromMenu)
+        optionsMenu.add_command(label="Other ...", command=self.configureOtherOptionsFromMenu)
         menuBar.add_cascade(label="Options", menu=optionsMenu)
         self.widgets["optionsMenu"] = optionsMenu
 
@@ -550,11 +636,13 @@ class FitBrowser(tkinter.Frame):
     def updateUiConfigurationFromApp(self):
         config = self.app.config
         self.autostart.set(config["autostart"])
+        self.autoopen.set(config["autoopen"])
         self.builtinCss.set(config["html"]["builtinCss"])
 
     def updateAppConfigurationFromUi(self):
         config = self.app.config
         config["autostart"] = self.autostart.get()
+        config["autoopen"] = self.autoopen.get()
         config["html"]["builtinCss"] = self.builtinCss.get()
         self.app.updateConfiguration()
 
@@ -612,13 +700,24 @@ class FitBrowser(tkinter.Frame):
         if self.loaded and self.app.config["autostart"]:
             self.start()
 
+    def updateFileLoadStatistics(self):
+        self.numberOfActivities.set(str(self.openHelper.count))
+        self.numberOfLocations.set(str(len(self.openHelper.locations)))
+
+        if self.openHelper.done:
+            if bool(self.openHelper):
+                self.app.setActivities(self.openHelper.activities)
+                self.updateWidgetsAfterOpen()
+            else:
+                self.statusMessage.set("Failed to load \"" + str(self.openHelper.files) + "\".")
+            self.openHelper = None
+        else:
+            self.top.after(FitBrowser.updatePeriodMs, self.updateFileLoadStatistics)
+
     def open(self, fileNames):
-        try:
-            self.app.open(fileNames)
-        except:
-            self.statusMessage.set("Failed to load \"" + str(fileNames) + "\".")
-            return
-        self.updateWidgetsAfterOpen()
+        self.statusMessage.set(f"Loading \"{fileNames}\" ...")
+        self.openHelper = UiFileOpener(fileNames, self.app.config["groupRadiusKm"])
+        self.top.after(FitBrowser.updatePeriodMs, self.updateFileLoadStatistics)
 
     def close(self):
         self.app.close()
@@ -637,6 +736,8 @@ class FitBrowser(tkinter.Frame):
         self.updateWidgets()
         self.statusMessage.set("Server started at " + self.app.url + ".")
         self.top.after(FitBrowser.updatePeriodMs, self.updateStatistics)
+        if self.running and self.app.config["autoopen"]:
+            self.openUrl()
 
     def updateStatistics(self):
         if not self.running:
@@ -708,12 +809,18 @@ class FitBrowser(tkinter.Frame):
     def configureGeonamesFromMenu(self):
         currentUserName = self.app.config["geonames"]["userName"]
         currentDatabase = self.app.config["geonames"]["database"]
-        geonamesConfigurator = GeonamesConfigurator(self, currentUserName, currentDatabase)
+        currentCacheRadiusKm = self.app.config["geonames"]["cacheRadiusKm"]
+        geonamesConfigurator = GeonamesConfigurator(self, currentUserName, currentDatabase, currentCacheRadiusKm)
         geonamesConfigurator.run()
         if geonamesConfigurator:
             newUserName = geonamesConfigurator.userName.get().strip()
             newDatabase = geonamesConfigurator.database.get().strip()
-            if len(newUserName) > 0 and len(newDatabase) > 0:
+            newCacheRadiusKmStr = geonamesConfigurator.cacheRadiusKm.get().strip()
+            try:
+                newCacheRadiusKm = float(newCacheRadiusKmStr)
+            except:
+                newCacheRadiusKm = -1
+            if len(newUserName) > 0 and len(newDatabase) > 0 and newCacheRadiusKm >= 0:
                 try:
                     isUserNameValid = fitgeo.check_geonames_username(newUserName)
                 except:
@@ -721,6 +828,7 @@ class FitBrowser(tkinter.Frame):
                 if isUserNameValid:
                     self.app.config["geonames"]["userName"] = newUserName
                     self.app.config["geonames"]["database"] = newDatabase
+                    self.app.config["geonames"]["cacheRadiusKm"] = newCacheRadiusKm
                     self.updateAppConfigurationFromUi()
                     self.statusMessage.set("Geonames configuration updated.")
                 else:
@@ -752,6 +860,25 @@ class FitBrowser(tkinter.Frame):
         else:
             self.statusMessage.set("Google Maps configuration canceled.")
 
+    def configureOtherOptionsFromMenu(self):
+        currentGroupRadiusKm = self.app.config["groupRadiusKm"]
+        generalOptionsConfigurator = GeneralOptionsConfigurator(self, currentGroupRadiusKm)
+        generalOptionsConfigurator.run()
+        if generalOptionsConfigurator:
+            newGroupRadiusKmStr = generalOptionsConfigurator.groupRadiusKm.get().strip()
+            try:
+                newGroupRadiusKm = float(newGroupRadiusKmStr)
+            except:
+                newGroupRadiusKm = -1
+            if newGroupRadiusKm >= 0:
+                self.app.config["groupRadiusKm"] = newGroupRadiusKm
+                self.updateAppConfigurationFromUi()
+                self.statusMessage.set("Options updated.")
+            else:
+                self.statusMessage.set("Invalid settings ignored.")
+        else:
+            self.statusMessage.set("Options settings canceled.")
+        
     def filterByDateFromMenu(self):
         self.statusMessage.set("Filtering by date ...")
         dateFilter = FilterByDate(self, self.app)
@@ -776,10 +903,13 @@ class FitBrowser(tkinter.Frame):
             else:
                 self.statusMessage.set("Cannot copy to clipboard: Please install \"pyperclip\" module.")
 
-    def openUrlFromMenu(self):
+    def openUrl(self):
         if self.running:
             webbrowser.open(self.app.url)
             self.statusMessage.set("Opening browser for \"" + self.app.url + "\".")
+        
+    def openUrlFromMenu(self):
+        self.openUrl()
 
     def selectCssFileFromMenu(self):
         self.statusMessage.set("CSS document selection...")
@@ -789,7 +919,7 @@ class FitBrowser(tkinter.Frame):
             return
         cssFileName = str(Path(fileName))
         self.builtinCss.set(False)
-        self.config["html"]["cssFileName"] = cssFileName
+        self.app.config["html"]["cssFileName"] = cssFileName
         self.statusMessage.set("Using CSS document \"" + cssFileName + "\".")
         self.updateAppConfigurationFromUi()
 

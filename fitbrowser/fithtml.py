@@ -147,6 +147,9 @@ class FitHtmlFormatter:
     def formatDayAndTime(self, timestamp):
         return timestamp.strftime("%b %d, %H:%M")
 
+    def formatDayAndTimeWithYear(self, timestamp):
+        return timestamp.strftime("%b %d, %Y, %H:%M")
+
     def formatDuration(self, elapsedSeconds):
         totalSeconds = int(elapsedSeconds)
         totalHours = int(totalSeconds / 3600)
@@ -530,7 +533,7 @@ class FitHtmlFormatter:
         locationName = self.formatLocation(summary["start_lat"], summary["start_lng"])
         if locationName:
             title += " near " + locationName
-        title += " on " + self.formatDayAndTime(activity.time())
+        title += " on " + self.formatDayAndTimeWithYear(activity.time())
         
         htmlLines = [
             "<!DOCTYPE html>",
