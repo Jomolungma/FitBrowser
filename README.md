@@ -150,7 +150,7 @@ menu is disabled when the built-in Web server is running.
   - `Enable` Enable Google Map view of activities and overview.
   - `Configure` Configures the Google Maps API key.
 - `Geonames`
-  - `Enable` Enable the use of [Geonames][https://www.geonames.org/]
+  - `Enable` Enable the use of [Geonames](https://www.geonames.org/)
     to look up place names from GPS coordinates.
   - `Configure` Configures Geonames integration:
     - `User Name` Your Geonames user name.
