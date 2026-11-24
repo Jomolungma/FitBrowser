@@ -56,8 +56,8 @@ class FitConfig:
     ]
 
     defaultConfig = {
-        "autostart": False,
-        "autoopen": False,
+        "autostart": True,
+        "autoopen": True,
         "groupRadiusKm": 10.0,
         "html": {
             "builtinCss": True,
@@ -68,11 +68,13 @@ class FitConfig:
             "portNumber": 0
         },
         "geonames": {
+            "enable": False,
             "userName": "",
             "database": "cities15000",
             "cacheRadiusKm": 5.0
         },
         "googleMaps": {
+            "enable": False,
             "apiKey": ""
         },
         "locationCache": []

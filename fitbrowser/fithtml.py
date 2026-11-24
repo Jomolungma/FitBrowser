@@ -63,7 +63,7 @@ class FitHtmlFormatter:
     </script>
     """
     
-    def __init__(self, config, activities, groupedActivities, geoLocator, groupRadiusKm):
+    def __init__(self, config, activities, groupedActivities, geoLocator, groupRadiusKm, googleMapsEnabled):
         self.css = None
         self.formatForYear = "%Y"
         self.formatForMonth = "%B"
@@ -72,6 +72,7 @@ class FitHtmlFormatter:
         self.groupedActivities = groupedActivities
         self.geoLocator = geoLocator
         self.groupRadiusKm = groupRadiusKm
+        self.googleMapsEnabled = googleMapsEnabled
         self.configure(config)
 
     def configure(self, configData):
@@ -226,7 +227,7 @@ class FitHtmlFormatter:
         htmlLines.append(self.formatDuration(summaryData["duration_s"]))
         locationName = self.formatLocation(summaryData["start_lat"], summaryData["start_lng"])
         if locationName:
-            htmlLines.append(locationName)
+            htmlLines.append("near " + locationName)
         return FitHtmlFormatter.joinLines(htmlLines)
 
     def cumulateActivitiesForMonth(self, year, month):
@@ -234,25 +235,25 @@ class FitHtmlFormatter:
 
         activityCount = 0
         activitySports = dict()
-        activityLocations = set()
+        activityLocations = activity.LocationSet(self.groupRadiusKm)
 
         while activityIndex != -1 and activityIndex < len(self.activities):
-            activity = self.activities[activityIndex]
-            if activity.time().year != year or activity.time().month != month:
+            act = self.activities[activityIndex]
+            if act.time().year != year or act.time().month != month:
                 break
             activityCount += 1
-            summary = activity.summary()
+            summary = act.summary()
             sport = summary["sport"]
             if sport not in activitySports:
                 activitySports[sport] = {"count": 0, "distance_m": 0, "duration_s": 0}
             activitySports[sport]["count"] += 1
-            if "distance_m" in summary and summary["distance_m"] != None:
+            if "distance_m" in summary and summary["distance_m"] is not None:
                 activitySports[sport]["distance_m"] += summary["distance_m"]
-            if "duration_s" in summary and summary["duration_s"] != None:
+            if "duration_s" in summary and summary["duration_s"] is not None:
                 activitySports[sport]["duration_s"] += summary["duration_s"]
-            location = self.formatLocation(summary["start_lat"], summary["start_lng"])
-            if location is not None:
-                activityLocations.add(location)
+            if "start_lat" in summary and summary["start_lat"] is not None:
+                if "start_lng" in summary and summary["start_lng"] is not None:
+                    activityLocations.add(summary["start_lat"], summary["start_lng"])
             activityIndex += 1
 
         return {
@@ -275,14 +276,16 @@ class FitHtmlFormatter:
         ]
         
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
-        outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
-        outputFile.write(FitHtmlFormatter.overviewInitMagic.encode())
+        
+        if self.googleMapsEnabled:
+            outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
+            outputFile.write(FitHtmlFormatter.overviewInitMagic.encode())
 
         htmlLines = [
             "</head>",
             "<body>",
             "<h1>Activity Overview</h1>",
-            "<div id=\"map\"></div>",
+            "<div id=\"map\"></div>" if self.googleMapsEnabled else "",
             "<div id=\"info\">"
         ]
         
@@ -338,10 +341,12 @@ class FitHtmlFormatter:
             htmlLines.append("</td>")
 
             locationList = ""
-            for location in monthlyData["locations"]:
+            for lat, lng in monthlyData["locations"]:
                 if locationList != "":
                     locationList += "; "
-                locationList += location
+                locationList += f"<a href=\"/location/{lat:.5f},{lng:.5f}.html\">"
+                locationList += self.formatLocation(lat, lng)
+                locationList += "</a>"
             htmlLines.append("<td class=\"overview-activities\">" + locationList + "</td>")
             htmlLines.append("</tr>")
 
@@ -387,13 +392,16 @@ class FitHtmlFormatter:
 
         while activityIndex != -1 and activityIndex < len(self.activities):
             activity = self.activities[activityIndex]
+            summary = activity.summary()
             if activity.time().year != year:
                 break
 
-            htmlLines = self.printNavigationHeaders(lastActivityTimestamp, activity.time())
-            outputFile.write(htmlLines.encode())
-            htmlLines = self.printActivitySummary(activity)
-            outputFile.write(htmlLines.encode())
+            if "distance_m" in summary and summary["distance_m"] is not None:
+                htmlLines = self.printNavigationHeaders(lastActivityTimestamp, activity.time())
+                outputFile.write(htmlLines.encode())
+                htmlLines = self.printActivitySummary(activity)
+                outputFile.write(htmlLines.encode())
+
             lastActivityTimestamp = activity.time()
             activityIndex += 1
 
@@ -544,17 +552,19 @@ class FitHtmlFormatter:
         ]
         
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
-        outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
-        outputFile.write(FitHtmlFormatter.activityInitMagic.encode())
+
+        if self.googleMapsEnabled:
+            outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
+            outputFile.write(FitHtmlFormatter.activityInitMagic.encode())
         
         htmlLines = [
             "</head>",
             "<body>",
             f"<h1>{title}</h1>",
-            "<div id=\"map\"></div>",
+            "<div id=\"map\"></div>" if self.googleMapsEnabled else "",
             "<div id=\"info\">"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
         self.generateActivitySplitsTable(self.activities[timestamp], outputFile)
         htmlLines = [

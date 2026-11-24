@@ -69,11 +69,12 @@ class NearestCity:
 
     def __init__(self, config):
         self.config = config
-        self.good = False
+        self.enabled = False
         if "geonames" in config:
-            if "userName" in config["geonames"]:
-                if len(config["geonames"]["userName"]) > 0:
-                    self.good = True
+            if "enable" in config["geonames"] and config["geonames"]["enable"]:
+                if "userName" in config["geonames"]:
+                    if len(config["geonames"]["userName"]) > 0:
+                        self.enabled = True
 
     def find_in_cache(self, lat: float, lon: float):
         """Return (country, city, distance) of the closest cached record within radius_km, or None."""
@@ -96,7 +97,7 @@ class NearestCity:
         data = response.json()
 
         if "status" in data:
-            self.good = False
+            self.enabled = False
             raise RuntimeError(f"GeoNames error: {data['status'].get('message', data['status'])}")
         if not data.get("geonames"):
             raise ValueError(f"No nearby place found for lat={lat}, lon={lon}")
@@ -113,7 +114,7 @@ class NearestCity:
         cached = self.find_in_cache(lat, lon)
         if cached is not None:
             return cached
-        if not self.good:
+        if not self.enabled:
             return None
 
         country, city, distance = self.query_geonames(lat, lon)
@@ -146,7 +147,7 @@ class NearestCity:
         data = response.json()
 
         if "status" in data:
-            self.good = False
+            self.enabled = False
             raise RuntimeError(f"GeoNames error: {data['status'].get('message', data['status'])}")
 
         country_key = country.casefold()
@@ -164,7 +165,7 @@ class NearestCity:
         cached = self.find_city_in_cache(country, city)
         if cached is not None:
             return cached
-        if not self.good:
+        if not self.enabled:
             return None
 
         found_country, found_city, lat, lon = self.query_geonames_city(country, city)

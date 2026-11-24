@@ -469,6 +469,8 @@ class FitBrowser(tkinter.Frame):
         self.autostart = tkinter.BooleanVar()
         self.autoopen = tkinter.BooleanVar()
         self.builtinCss = tkinter.BooleanVar()
+        self.googleMapsEnable = tkinter.BooleanVar()
+        self.geonamesEnable = tkinter.BooleanVar()
         self.numberOfActivities = tkinter.StringVar()
         self.numberOfLocations = tkinter.StringVar()
         self.statusMessage = tkinter.StringVar()
@@ -482,6 +484,8 @@ class FitBrowser(tkinter.Frame):
         self.setupDnd()
         self.updateUiConfigurationFromApp()
         self.updateWidgets()
+        self.googleMapsEnable.trace_add("write", self.googleMapsEnableCallback)
+        self.geonamesEnable.trace_add("write", self.geonamesEnableCallback)
 
     def createWidgets(self):
         self.defaultFont = font.Font(family="Times", size=16)
@@ -533,10 +537,18 @@ class FitBrowser(tkinter.Frame):
         cssMenu.add_command(label="Load ...", command=self.selectCssFileFromMenu)
         cssMenu.add_command(label="Save Template As ...", command=self.saveCssTemplateFromMenu)
         optionsMenu.add_cascade(label="Style Sheet", menu=cssMenu)
+
+        gmMenu = tkinter.Menu(optionsMenu, tearoff=0)
+        gmMenu.add_checkbutton(label="Enable", variable=self.googleMapsEnable, onvalue=True, offvalue=False)
+        gmMenu.add_command(label="Configure ...", command=self.configureGoogleMapsFromMenu)
+        optionsMenu.add_cascade(label="Google Maps", menu=gmMenu)
+
+        gnMenu = tkinter.Menu(optionsMenu, tearoff=0)
+        gnMenu.add_checkbutton(label="Enable", variable=self.geonamesEnable, onvalue=True, offvalue=False)
+        gnMenu.add_command(label="Configure ...", command=self.configureGeonamesFromMenu)
+        optionsMenu.add_cascade(label="Geonames", menu=gnMenu)
         
         optionsMenu.add_command(label="HTTP ...", command=self.configureHTTPFromMenu)
-        optionsMenu.add_command(label="Google Maps ...", command=self.configureGoogleMapsFromMenu)
-        optionsMenu.add_command(label="Geonames ...", command=self.configureGeonamesFromMenu)
         optionsMenu.add_command(label="Other ...", command=self.configureOtherOptionsFromMenu)
         menuBar.add_cascade(label="Options", menu=optionsMenu)
         self.widgets["optionsMenu"] = optionsMenu
@@ -638,12 +650,16 @@ class FitBrowser(tkinter.Frame):
         self.autostart.set(config["autostart"])
         self.autoopen.set(config["autoopen"])
         self.builtinCss.set(config["html"]["builtinCss"])
+        self.googleMapsEnable.set(config["googleMaps"]["enable"])
+        self.geonamesEnable.set(config["geonames"]["enable"])
 
     def updateAppConfigurationFromUi(self):
         config = self.app.config
         config["autostart"] = self.autostart.get()
         config["autoopen"] = self.autoopen.get()
         config["html"]["builtinCss"] = self.builtinCss.get()
+        config["googleMaps"]["enable"] = self.googleMapsEnable.get()
+        config["geonames"]["enable"] = self.geonamesEnable.get()
         self.app.updateConfiguration()
 
     def updateButtonState(self, name, state):
@@ -806,6 +822,17 @@ class FitBrowser(tkinter.Frame):
         else:
             self.statusMessage.set("HTTP Server configuration canceled.")
 
+    def geonamesEnableCallback(self, *args):
+        if self.geonamesEnable.get():
+            currentUserName = self.app.config["geonames"]["userName"]
+            try:
+                isUserNameValid = fitgeo.check_geonames_username(currentUserName)
+            except:
+                isUserNameValid = False
+            if not isUserNameValid:
+                self.statusMessage.set("Invalid Geonnames user name.")
+                self.geonamesEnable.set(False)
+
     def configureGeonamesFromMenu(self):
         currentUserName = self.app.config["geonames"]["userName"]
         currentDatabase = self.app.config["geonames"]["database"]
@@ -831,12 +858,24 @@ class FitBrowser(tkinter.Frame):
                     self.app.config["geonames"]["cacheRadiusKm"] = newCacheRadiusKm
                     self.updateAppConfigurationFromUi()
                     self.statusMessage.set("Geonames configuration updated.")
+                    self.geonamesEnable.set(True)
                 else:
                     self.statusMessage.set("Invalid Geonnames user name.")
             else:
                 self.statusMessage.set("Invalid Geonames configuration.")
         else:
             self.statusMessage.set("Geonames configuration canceled.")
+
+    def googleMapsEnableCallback(self, *args):
+        if self.googleMapsEnable.get():
+            currentApiKey = self.app.config["googleMaps"]["apiKey"]
+            try:
+                isKeyValid = fitkey.check_google_api_key(currentApiKey)
+            except:
+                isKeyValid = False
+            if not isKeyValid:
+                self.statusMessage.set("Invalid Google Maps API key.")
+                self.googleMapsEnable.set(False)
 
     def configureGoogleMapsFromMenu(self):
         currentApiKey = self.app.config["googleMaps"]["apiKey"]
@@ -851,8 +890,9 @@ class FitBrowser(tkinter.Frame):
                     isKeyValid = False
                 if isKeyValid:
                     self.app.config["googleMaps"]["apiKey"] = newApiKey
-                    self.updateAppConfigurationFromUi()
                     self.statusMessage.set("Google Maps configuration updated.")
+                    self.updateAppConfigurationFromUi()
+                    self.googleMapsEnable.set(True)
                 else:
                     self.statusMessage.set("Invalid Google Maps API key.")
             else:

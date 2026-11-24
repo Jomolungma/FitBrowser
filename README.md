@@ -69,9 +69,8 @@ In the **Fit Browser** user interface, go to `Google Maps ...` in the
 ## Geonames
 
 [Geonames](https://www.geonames.org/) is used to look up place names
-corresponding to latitude and longitude values. You need to create a
-free account by clicking on `Account` and `Create an account` in the
-top right corner.
+corresponding to GPS coordinates. You need to create a free account by
+clicking on `Account` and `Create an account` in the top right corner.
 
 After creating and confirming your account, go to `Geonames ...` in
 the `Options` menu and enter your _User Name_ (**not** your email
@@ -147,17 +146,23 @@ menu is disabled when the built-in Web server is running.
       different every time. When set to any other valid port number
       (between 1024 and 65535), the built-in Web server binds to the
       same address every time.
-- `Google Maps` Configures the Google Maps API key.
-- `Geonames` Configures the Geonames user name and database.
-  For valid database names, see the `cities` parameter
-  [here](https://www.geonames.org/export/web-services.html#findNearbyPlaceName).
-  `Cache Radius` is the radius for the location cache, in kilometers. When a
-  new location is within this radius of a known location, it is not looked up
-  again.
+- `Google Maps`
+  - `Enable` Enable Google Map view of activities and overview.
+  - `Configure` Configures the Google Maps API key.
+- `Geonames`
+  - `Enable` Enable the use of [Geonames][https://www.geonames.org/]
+    to look up place names from GPS coordinates.
+  - `Configure` Configures Geonames integration:
+    - `User Name` Your Geonames user name.
+    - `Database` The Geonames database to use. See the `cities` parameter
+      [here](https://www.geonames.org/export/web-services.html#findNearbyPlaceName).
+    - `Cache Radius` The radius for the location cache, in kilometers. When a
+      new location is within this radius of a known location, it is not looked
+      up again.
 - `Other` Configures miscellaneous other options.
-  - `Group Radius` In the overview map, locations within this distance of
-    one another are grouped into a single location group, i.e., sharing the
-    same marker on the map.
+  - `Group Radius` In the overview map, locations within this distance,
+    in kilometers, of one another are grouped into a single location group,
+    i.e., they will share the same marker on the activities overview map.
 
 # Formatting
 
@@ -195,13 +200,19 @@ See `Set-Up` above.
 If locations are shown as numerical latitude and longitude values,
 then the Geonames user name is incorrect. See `Set Up` above.
 
+Some devices allow you to select the sport (e.g., Running or Cycling)
+for an activity. Other activities show up as "Moving."
+
+**Fit Browser** was not tested with multisport activities (e.g., a
+Triathlon) yet.
+
 # Local Processing
 
 **Fit Browser** processes your activity files locally, in memory, on
 the fly.
 
-The integration with Google Maps means that Google will know what
-parts of the world you are looking at.
+The integration with Google Maps means that Google knows what parts of
+the world you are looking at.
 
 Likewise, Geonames will know the locations that **Fit Browser** is
 looking up -- i.e., the start locations of your activities.

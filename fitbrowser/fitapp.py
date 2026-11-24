@@ -136,7 +136,6 @@ class BgFileOpener:
         try:
             self.activities = activity.open_activities(self.files, self.callback)
         except Exception as e:
-            print("Oops: " + str(e))
             self.openFinished(False)
             return
 
@@ -152,7 +151,13 @@ class ActivitiesWrapper:
         self.config = config
         self.activities = activities
         self.groupedActivities = groupedActivities
-        self.htmlFormatter = fithtml.FitHtmlFormatter(self.config["html"], activities, groupedActivities, geoLocator, self.config["groupRadiusKm"])
+        self.htmlFormatter = fithtml.FitHtmlFormatter(
+            self.config["html"],
+            activities,
+            groupedActivities,
+            geoLocator,
+            self.config["groupRadiusKm"],
+            self.config["googleMaps"]["enable"])
         self.files = dict()
         for fileName in ActivitiesWrapper.fileList:
             self.loadFile(fileName)
@@ -402,6 +407,7 @@ class App:
     def startHttpServer(self):
         if self.httpServerManager:
             return
+        self.geoLocator = fitgeo.NearestCity(self.config)
         self.activitiesWrapper = ActivitiesWrapper(self.activities, self.groupedActivities, self.config, self.geoLocator)
         self.httpBackend = HttpHtmlGlue(self.activitiesWrapper)
         if self.statisticsCollector:
