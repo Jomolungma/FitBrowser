@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fitbrowser"
-version = "0.0.1"
+version = "0.0.2"
 description = "Fit Browser"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,10 +16,10 @@ dependencies = [ "garmin_fit_sdk", "pyperclip", "tkinterdnd2" ]
 tests = ["pytest", "pytest-cov", "html5lib"]
 
 [project.scripts]
-wacb-cli = "fitbrowser:runCli"
+fitbrowser-cli = "fitbrowser:runCli"
 
 [project.gui-scripts]
-wacb = "fitbrowser:runUi"
+fitbrowser = "fitbrowser:runUi"
 
 [tool.setuptools]
 include-package-data = true
