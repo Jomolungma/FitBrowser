@@ -109,7 +109,7 @@ def main(argv=None):
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--key", help="API key to check")
     source.add_argument("--file",
-                        help=f'JSON file with a "key" field')
+                        help='JSON file with a "key" field')
     parser.add_argument("--timeout", type=float, default=10.0,
                         help="network timeout in seconds (default: 10)")
     args = parser.parse_args(argv)

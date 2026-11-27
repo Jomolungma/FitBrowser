@@ -13,6 +13,7 @@
 # C0209: Consider using f-string.
 # C0301: Line too long.
 # C0302: Too many lines in module.
+# C0325: Unnecessary parens.
 # W0613: Unused argument.
 # W0702: No exception type(s) specified.
 # W0718: Catching too general exception Exception.
@@ -32,4 +33,4 @@
 # R1720: Unnecessary "elif" after "raise".
 # R1734: Consider using [] instead of list().
 # R1735: Consider using {} instead of a call to dict().
-disable=E0401,C0103,C0116,C0209,C0301,C0302,W0613,W0702,W0718,W0719,R0401,R0902,R0903,R0904,R0911,R0912,R0913,R0914,R0915,R0917,R1705,R1716,R1720,R1734,R1735
+disable=E0401,C0103,C0116,C0209,C0301,C0302,C0325,W0613,W0702,W0718,W0719,R0401,R0902,R0903,R0904,R0911,R0912,R0913,R0914,R0915,R0917,R1705,R1716,R1720,R1734,R1735

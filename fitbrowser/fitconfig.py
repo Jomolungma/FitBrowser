@@ -176,7 +176,7 @@ class FitConfig:
             if math.isclose(lat, record["lat"]) and math.isclose(lon, record["lon"]):
                 return True
         return False
-                
+
     def addLocationRecord(self, record):
         if self.haveLocationRecord(record["lat"], record["lon"]):
             return

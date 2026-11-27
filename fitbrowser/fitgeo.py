@@ -2,9 +2,7 @@
 """Find the nearest city to a given latitude/longitude using GeoNames, with a local cache."""
 
 import argparse
-import json
 import math
-import os
 import sys
 import requests
 
@@ -50,9 +48,9 @@ def check_geonames_username(username: str, timeout: float = 10) -> bool:
     # look at the body before treating the HTTP status as an error.
     try:
         data = response.json()
-    except ValueError:
+    except ValueError as exc:
         response.raise_for_status()
-        raise RuntimeError(f"Unexpected GeoNames response: {response.text[:200]!r}")
+        raise RuntimeError(f"Unexpected GeoNames response: {response.text[:200]!r}") from exc
 
     status = data.get("status")
     if status is None:
@@ -82,6 +80,7 @@ class NearestCity:
         radius_km = float(self.config["geonames"]["cacheRadiusKm"])
         for record in self.config["locationCache"]:
             d = haversine_km(lat, lon, record["lat"], record["lon"])
+            # pylint: disable=unsubscriptable-object
             if d <= radius_km and (best is None or d < best[0]):
                 best = (d, (record["country"], record["city"], record["distance"]))
         return best[1] if best else None
@@ -169,23 +168,19 @@ class NearestCity:
             return None
 
         found_country, found_city, lat, lon = self.query_geonames_city(country, city)
-        self.records.append(
-            {"lat": lat, "lon": lon, "country": found_country, "city": found_city, "distance": 0.0}
-        )
+        self.config.addLocationRecord({"lat": lat, "lon": lon, "country": found_country, "city": found_city, "distance": 0.0})
         return (lat, lon, 0.0)
 
 def main():
     parser = argparse.ArgumentParser(description="Find the nearest city to a lat/lon coordinate.")
     parser.add_argument('-n', '--noConfigFile', default=False, action="store_true", help="Do not load default configuration file.")
     parser.add_argument('-c', '--configFile', default=None, help="Use this configuration file.")
-    parser.add_argument('-v', '--verbose', default=0, action="count", help="Verbosity level.")
     parser.add_argument("latitude", type=float, help="Latitude, e.g. 48.1")
     parser.add_argument("longitude", type=float, help="Longitude, e.g. 11.5")
     args = parser.parse_args()
 
     useConfigFile = not args.noConfigFile
     configFile = args.configFile
-    verbosity = args.verbose
     config = fitconfig.FitConfig(useConfigFile, configFile)
 
     try:

@@ -23,7 +23,6 @@ def run(ui=None):
     parser.add_argument('-c', '--configFile', default=None, help="Use this configuration file.")
     parser.add_argument('-v', '--verbose', default=0, action="count", help="Verbosity level.")
     parser.add_argument('--ui', default=None, action=argparse.BooleanOptionalAction, help="Whether to run the UI or on the console.")
-    parser.add_argument('-t', '--title', default=None, help="The title to use for HTML pages.")
     parser.add_argument('activityFiles', nargs="*", default=[], help="The activity files to load.")
     args = parser.parse_args()
 
@@ -31,20 +30,19 @@ def run(ui=None):
     useConfigFile = not args.noConfigFile
     configFile = args.configFile
     verbosity = args.verbose
-    title = args.title
 
     activityFiles = []
     for activityFile in args.activityFiles:
         activityFiles.extend(glob.glob(activityFile))
 
     if useUi:
-        fitui.run(activityFiles, title, useConfigFile, configFile, verbosity)
+        fitui.run(activityFiles, useConfigFile, configFile, verbosity)
     else:
         if len(activityFiles) == 0:
             # pylint: disable=consider-using-sys-exit
             print("Must provide activity file.")
             exit(1)
-        fitapp.run(activityFiles, title, useConfigFile, configFile, verbosity)
+        fitapp.run(activityFiles, useConfigFile, configFile, verbosity)
 
 if __name__ == "__main__":
     run()

@@ -18,22 +18,36 @@
 #
 
 """
-Generate HTML information.
+Generate HTML and other resources served over HTTP.
 """
 
 import re
+import sys
 import html
+import json
+import pkgutil
 import datetime
 from os import path
 
 if __package__ == "fitbrowser":
-    from . import activity
+    from . import fitact
     from . import fitcss
 else:
-    import activity
+    import fitact
     import fitcss
 
+
 class FitHtmlFormatter:
+    """
+    HTML generator.
+    Able to generate:
+    - Activity overview page, index.html.
+    - Annual overview page, <year>.html
+    - Location overview page, "/location/<lat>,<lon>.html".
+    - Activity page, "/activity/<timestamp>.html".
+    Also feels responsible for the fitbrowser.css style sheet.
+    """
+
     cssUrl = "fitbrowser.css"
     lineTerminator = "\n"
     regexForFileName = re.compile("/?([0-9]{4})-?([0-9]{2})?\\.html")
@@ -55,14 +69,14 @@ class FitHtmlFormatter:
         init(document.location);
     </script>
     """
-    
+
     activityInitMagic = """
     <script type="module">
         import { init } from '/activity.js';
         init(document.location);
     </script>
     """
-    
+
     def __init__(self, config, activities, groupedActivities, geoLocator, groupRadiusKm, googleMapsEnabled):
         self.css = None
         self.formatForYear = "%Y"
@@ -132,7 +146,7 @@ class FitHtmlFormatter:
         return "{0:04d}-{1:02d}".format(year, month)
 
     def linkMonth(self, toYear, toMonth):
-        url = "{0:04d}.html#".format(toYear, toMonth)
+        url = "{0:04d}.html#".format(toYear)
         url += self.anchorMonth(toYear, toMonth)
         return url
 
@@ -163,13 +177,16 @@ class FitHtmlFormatter:
     def formatDistance(self, elapsedMeters):
         formattedDistance = f"{elapsedMeters/1000:.1f} km"
         return formattedDistance
-    
+
     def formatLocation(self, lat, lon):
         if lat is None or lon is None:
             return None
-        try:
-            place = self.geoLocator.nearest_city(lat, lon)
-        except:
+        if self.geoLocator is not None:
+            try:
+                place = self.geoLocator.nearest_city(lat, lon)
+            except:
+                place = None
+        else:
             place = None
         if not place:
             return f"{lat:.5f},{lon:.5f}"
@@ -186,11 +203,9 @@ class FitHtmlFormatter:
         if lastTimestamp:
             differentYear = lastTimestamp.year != thisTimestamp.year
             differentMonth = differentYear or (lastTimestamp.month != thisTimestamp.month)
-            differentDay = differentMonth or (lastTimestamp.day != thisTimestamp.day)
         else:
             differentYear = True
             differentMonth = True
-            differentDay = True
 
         if differentMonth:
             if lastTimestamp:
@@ -235,7 +250,7 @@ class FitHtmlFormatter:
 
         activityCount = 0
         activitySports = dict()
-        activityLocations = activity.LocationSet(self.groupRadiusKm)
+        activityLocations = fitact.LocationSet(self.groupRadiusKm)
 
         while activityIndex != -1 and activityIndex < len(self.activities):
             act = self.activities[activityIndex]
@@ -265,7 +280,7 @@ class FitHtmlFormatter:
     #
     # Top-level index.html.
     #
-    
+
     def generateIndexHtml(self, outputFile):
         htmlLines = [
             "<!DOCTYPE html>",
@@ -274,9 +289,9 @@ class FitHtmlFormatter:
             f"<link rel=\"stylesheet\" href=\"/{FitHtmlFormatter.cssUrl}\">",
             "<title>Activity Overview</title>"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
-        
+
         if self.googleMapsEnabled:
             outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
             outputFile.write(FitHtmlFormatter.overviewInitMagic.encode())
@@ -288,9 +303,9 @@ class FitHtmlFormatter:
             "<div id=\"map\"></div>" if self.googleMapsEnabled else "",
             "<div id=\"info\">"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
-        
+
         lastYear = None
         thisYear, thisMonth = self.activities.calendar.getFirstMonth()
 
@@ -322,6 +337,7 @@ class FitHtmlFormatter:
 
             htmlLines.append("<td class=\"overview-activities\">")
             firstSport = True
+            # pylint: disable=consider-iterating-dictionary
             for sport in monthlyData["sports"].keys():
                 if firstSport:
                     firstSport = False
@@ -350,7 +366,6 @@ class FitHtmlFormatter:
             htmlLines.append("<td class=\"overview-activities\">" + locationList + "</td>")
             htmlLines.append("</tr>")
 
-            lastMonth = thisMonth
             lastYear = thisYear
             thisYear, thisMonth = self.activities.calendar.getNextMonth(thisYear, thisMonth)
 
@@ -367,7 +382,7 @@ class FitHtmlFormatter:
         htmlLines = [
             "</div>"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
         htmlLines = self.htmlFooter()
         outputFile.write(htmlLines.encode())
@@ -375,7 +390,7 @@ class FitHtmlFormatter:
     #
     # Annual page.
     #
-    
+
     def generateAnnualPage(self, year, outputFile):
         title = f"Activities in {year}"
         htmlLines = self.htmlHeader(title)
@@ -386,7 +401,7 @@ class FitHtmlFormatter:
         infoLines.append(title)
         infoLines.append("</h1>")
         outputFile.write(FitHtmlFormatter.joinLines(infoLines).encode())
-        
+
         lastActivityTimestamp = None
         activityIndex = self.activities.findByTimestamp(datetime.date(year, 1, 1))
 
@@ -417,7 +432,7 @@ class FitHtmlFormatter:
     #
     # Activities around a location.
     #
-    
+
     def generateLocationPage(self, lat, lon, outputFile):
         locationName = self.formatLocation(lat, lon)
         title = f"Activities near {locationName}" if locationName is not None else None
@@ -432,7 +447,7 @@ class FitHtmlFormatter:
 
         lastActivityTimestamp = None
         locationGroup = self.groupedActivities.find_by_location(lat, lon)
-        
+
         if locationGroup is not None:
             for activity in locationGroup:
                 htmlLines = self.printNavigationHeaders(lastActivityTimestamp, activity.time())
@@ -448,11 +463,11 @@ class FitHtmlFormatter:
         outputFile.write(htmlLines.encode())
         htmlLines = self.htmlFooter()
         outputFile.write(htmlLines.encode())
-        
+
     #
     # Show an activity.
     #
-    
+
     def generateActivitySplitsTable(self, activity, outputFile):
         summary = activity.summary()
         lastSplitRecord = activity.records()[0]
@@ -467,7 +482,7 @@ class FitHtmlFormatter:
         infoLines.append("<th class=\"activity-elevation\">Elevation</th>")
         infoLines.append("<th class=\"activity-heartrate\">Heart Rate</th>")
         infoLines.append("</tr>")
-        
+
         #
         # Table rows with one row per kilometer.
         #
@@ -525,7 +540,7 @@ class FitHtmlFormatter:
         infoLines.append("<tr class=\"activity-row\">")
         infoLines.append(f"<td class=\"activity-distance\">{(summary['distance_m']/1000):.2f}</td>")
         infoLines.append(f"<td class=\"activity-time\">{formattedDuration}</td>")
-        infoLines.append(f"<td class=\"activity-split\"></td>")
+        infoLines.append("<td class=\"activity-split\"></td>")
         infoLines.append(f"<td class=\"activity-elevation\">{elevationDifference:+d}</td>")
         infoLines.append(f"<td class=\"activity-heartrate\">{averageHeartRate}</td>")
         infoLines.append("</tr>")
@@ -542,7 +557,7 @@ class FitHtmlFormatter:
         if locationName:
             title += " near " + locationName
         title += " on " + self.formatDayAndTimeWithYear(activity.time())
-        
+
         htmlLines = [
             "<!DOCTYPE html>",
             "<html>",
@@ -550,13 +565,13 @@ class FitHtmlFormatter:
             f"<link rel=\"stylesheet\" href=\"/{FitHtmlFormatter.cssUrl}\">",
             f"<title>{title}</title>"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
 
         if self.googleMapsEnabled:
             outputFile.write(FitHtmlFormatter.googleMapsIntegrationMagic.encode())
             outputFile.write(FitHtmlFormatter.activityInitMagic.encode())
-        
+
         htmlLines = [
             "</head>",
             "<body>",
@@ -570,11 +585,11 @@ class FitHtmlFormatter:
         htmlLines = [
             "</div>"
         ]
-        
+
         outputFile.write(FitHtmlFormatter.joinLines(htmlLines).encode())
         htmlLines = self.htmlFooter()
         outputFile.write(htmlLines.encode())
-        
+
     #
     # Write the CSS document.
     #
@@ -642,10 +657,121 @@ class FitHtmlFormatter:
             return True
         return False
 
-    def copyFile(self, path, outputFile, updatecb=None):
-        if self.css is not None and self.isCssUrl(path):
+    def copyFile(self, url, outputFile, updatecb=None):
+        if self.css is not None and self.isCssUrl(url):
             self.generateCss(outputFile, updatecb)
-        elif self.isHtmlUrl(path):
-            self.generateHtml(path, outputFile, updatecb)
+        elif self.isHtmlUrl(url):
+            self.generateHtml(url, outputFile, updatecb)
         else:
             raise Exception("Oops.")
+
+class ResourceGenerator:
+    """
+    Generate HTML, JSON and Java -- any resources served over HTTP.
+    """
+
+    fileList = [
+        "activity.js",
+        "overview.js"
+    ]
+
+    def __init__(self, activities, groupedActivities, config, geoLocator):
+        self.config = config
+        self.activities = activities
+        self.groupedActivities = groupedActivities
+        self.htmlFormatter = FitHtmlFormatter(
+            self.config["html"],
+            activities,
+            groupedActivities,
+            geoLocator,
+            self.config["groupRadiusKm"],
+            self.config["googleMaps"]["enable"])
+        self.files = dict()
+        for fileName in ResourceGenerator.fileList:
+            self.loadFile(fileName)
+
+    def loadFile(self, fileName):
+        if "fitbrowser" in sys.modules:
+            self.files[fileName] = pkgutil.get_data("fitbrowser", fileName)
+        else:
+            filePath = path.abspath(path.join(path.dirname(__file__), fileName))
+            with open(filePath, "rb") as fileFile:
+                self.files[fileName] = fileFile.read()
+
+    def getTimestampFromName(self, name):
+        if ((len(name) >= 2) and (name[0] == "/")):
+            name = name[1:]
+        if name.startswith("activity/"):
+            name = name[9:]
+        lastDot = name.rfind(".")
+        if lastDot == -1:
+            return None
+        try:
+            return self.activities.parse_timestamp(name[:lastDot])
+        except:
+            return None
+
+    def copyActivityJson(self, timestamp, outputFile):
+        activity = self.activities[timestamp]
+
+        summary = activity.summary()
+        records = activity.records()
+        pauses = activity.pauses()
+
+        data = {
+            'sport': summary['sport'],
+            'records': records,
+            'pauses': pauses,
+            'elevation': {'ascent': summary['ascent'], 'descent': summary['descent']},
+        }
+
+        binData = json.dumps(data, indent=2).encode("utf-8")
+        outputFile.write(binData)
+
+    def makeGmApiKeyJson(self, outputFile):
+        data = '{ "key": "' + self.config["googleMaps"]["apiKey"] + '" }'
+        outputFile.write(data.encode())
+
+    def makeActivityMarkersJson(self, outputFile):
+        markers = []
+        for group in self.groupedActivities:
+            marker = group.describe()
+            marker["url"] = f'/location/{group.lat:.5f},{group.lng:.5f}.html'
+            markers.append(marker)
+        binData = json.dumps(markers, indent=2).encode("utf-8")
+        outputFile.write(binData)
+
+    def hasFile(self, name):
+        if ((len(name) >= 2) and (name[0] == "/")):
+            name = name[1:]
+        if name in self.files:
+            return True
+        elif self.htmlFormatter.hasFile(name):
+            return True
+        elif name.endswith("gmapikey.json"):
+            return True
+        elif name.endswith("index.json"):
+            return True
+        elif name.startswith("activity/"):
+            timestamp = self.getTimestampFromName(name)
+            if timestamp is None:
+                return False
+            haveTimestamp = timestamp in self.activities
+            return haveTimestamp and name.endswith(".json")
+        else:
+            return False
+
+    def copyFile(self, name, outputFile, updatecb=None):
+        if ((len(name) >= 2) and (name[0] == "/")):
+            name = name[1:]
+        if name in self.files:
+            outputFile.write(self.files[name])
+        elif self.htmlFormatter.hasFile(name):
+            self.htmlFormatter.copyFile(name, outputFile)
+        elif name.endswith("gmapikey.json"):
+            self.makeGmApiKeyJson(outputFile)
+        elif name.endswith("index.json"):
+            self.makeActivityMarkersJson(outputFile)
+        elif name.startswith("activity/") and name.endswith(".json"):
+            timestamp = self.getTimestampFromName(name)
+            self.copyActivityJson(timestamp, outputFile)

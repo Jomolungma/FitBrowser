@@ -13,13 +13,15 @@ from tkinter import ttk, font
 from pathlib import Path
 
 if __package__ == "fitbrowser":
-    from . import activity
+    from . import fitact
+    from . import fitbgfo
     from . import fitapp
     from . import fitcss
     from . import fitkey
     from . import fitgeo
 else:
-    import activity
+    import fitact
+    import fitbgfo
     import fitapp
     import fitcss
     import fitkey
@@ -443,11 +445,23 @@ class GeneralOptionsConfigurator(tkinter.Toplevel):
         self.grab_set()
         self.parent.top.wait_window(self)
 
-class UiFileOpener(fitapp.BgFileOpener):
-    def __init__(self, files, groupRadiusKm):
+class UiFilesOpener(fitbgfo.BgFilesOpener):
+    """
+    Halper class to open activity files in the background, showing progress
+    on the console.
+    """
+
+    def __init__(self, parent, files, groupRadiusKm):
+        self.parent = parent
         self.count = 0
-        self.locations = activity.LocationSet(groupRadiusKm)
-        super().__init__(files, self.activityLoaded)
+        self.locations = fitact.LocationSet(groupRadiusKm)
+        super().__init__(files, self.activityLoaded, self.fileLoaded)
+
+    def fileLoaded(self, fileName, isFinished):
+        if not isFinished:
+            self.parent.statusMessage.set(f"Loading \"{fileName}\" ...")
+        else:
+            self.parent.statusMessage.set(f"Loading \"{fileName}\" ... done.")
 
     def activityLoaded(self, activity):
         summary = activity.summary()
@@ -547,7 +561,7 @@ class FitBrowser(tkinter.Frame):
         gnMenu.add_checkbutton(label="Enable", variable=self.geonamesEnable, onvalue=True, offvalue=False)
         gnMenu.add_command(label="Configure ...", command=self.configureGeonamesFromMenu)
         optionsMenu.add_cascade(label="Geonames", menu=gnMenu)
-        
+
         optionsMenu.add_command(label="HTTP ...", command=self.configureHTTPFromMenu)
         optionsMenu.add_command(label="Other ...", command=self.configureOtherOptionsFromMenu)
         menuBar.add_cascade(label="Options", menu=optionsMenu)
@@ -701,7 +715,7 @@ class FitBrowser(tkinter.Frame):
         self.statusRunning.set(runningMessage)
 
     def browseForFilesToOpen(self):
-        title = "Select chat(s) to open."
+        title = "Select activity file(s) to open."
         fileTypeSuggestion = [["FIT Files", "*.fit"], ["Training Center Files", "*.tcx"], ["Sport Tracks Files", "*.logbook3"], ["Apple Health Files", "*.gpx"], ["Zip Files", "*.zip"]]
         return tkinter.filedialog.askopenfilenames(title=title, filetypes=fileTypeSuggestion)
 
@@ -711,7 +725,7 @@ class FitBrowser(tkinter.Frame):
         self.numberOfActivities.set(str(numberOfActivities))
         self.numberOfLocations.set(str(numberOfLocations))
         self.statusMessage.set("{0} activities loaded.".format(numberOfActivities))
-        
+
         self.updateWidgets()
         if self.loaded and self.app.config["autostart"]:
             self.start()
@@ -725,14 +739,13 @@ class FitBrowser(tkinter.Frame):
                 self.app.setActivities(self.openHelper.activities)
                 self.updateWidgetsAfterOpen()
             else:
-                self.statusMessage.set("Failed to load \"" + str(self.openHelper.files) + "\".")
+                self.statusMessage.set("Failed to load activities.")
             self.openHelper = None
         else:
             self.top.after(FitBrowser.updatePeriodMs, self.updateFileLoadStatistics)
 
     def open(self, fileNames):
-        self.statusMessage.set(f"Loading \"{fileNames}\" ...")
-        self.openHelper = UiFileOpener(fileNames, self.app.config["groupRadiusKm"])
+        self.openHelper = UiFilesOpener(self, fileNames, self.app.config["groupRadiusKm"])
         self.top.after(FitBrowser.updatePeriodMs, self.updateFileLoadStatistics)
 
     def close(self):
@@ -865,6 +878,7 @@ class FitBrowser(tkinter.Frame):
                 self.statusMessage.set("Invalid Geonames configuration.")
         else:
             self.statusMessage.set("Geonames configuration canceled.")
+        self.updateAppConfigurationFromUi()
 
     def googleMapsEnableCallback(self, *args):
         if self.googleMapsEnable.get():
@@ -899,6 +913,7 @@ class FitBrowser(tkinter.Frame):
                 self.statusMessage.set("Invalid Google Maps configuration.")
         else:
             self.statusMessage.set("Google Maps configuration canceled.")
+        self.updateAppConfigurationFromUi()
 
     def configureOtherOptionsFromMenu(self):
         currentGroupRadiusKm = self.app.config["groupRadiusKm"]
@@ -918,7 +933,8 @@ class FitBrowser(tkinter.Frame):
                 self.statusMessage.set("Invalid settings ignored.")
         else:
             self.statusMessage.set("Options settings canceled.")
-        
+        self.updateAppConfigurationFromUi()
+
     def filterByDateFromMenu(self):
         self.statusMessage.set("Filtering by date ...")
         dateFilter = FilterByDate(self, self.app)
@@ -947,7 +963,7 @@ class FitBrowser(tkinter.Frame):
         if self.running:
             webbrowser.open(self.app.url)
             self.statusMessage.set("Opening browser for \"" + self.app.url + "\".")
-        
+
     def openUrlFromMenu(self):
         self.openUrl()
 
@@ -993,7 +1009,7 @@ class FitBrowser(tkinter.Frame):
         else:
             self.start()
 
-def run(activityFiles=None, title=None, useConfigFile=True, configFile=None, verbosity=0):
+def run(activityFiles=None, useConfigFile=True, configFile=None, verbosity=0):
     if haveDnd:
         top = tkinterdnd2.TkinterDnD.Tk()
     else:
@@ -1001,8 +1017,6 @@ def run(activityFiles=None, title=None, useConfigFile=True, configFile=None, ver
     app = FitBrowser(top, useConfigFile, configFile)
     if activityFiles:
         app.open(activityFiles)
-    if title:
-        app.title.set(title)
     top.mainloop()
 
 if __name__ == "__main__":

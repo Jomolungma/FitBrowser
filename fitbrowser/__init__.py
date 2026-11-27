@@ -9,7 +9,7 @@ from .fitbrowser import *
 
 if not "-m" in sys.argv:
     def runApp(ui=None):
-        fitbrowser.run(ui)
+        run(ui)
 
     def runUi():
         runApp(True)

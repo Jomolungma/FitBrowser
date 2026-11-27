@@ -22,26 +22,19 @@ The classes here integrate the handling of activity files, HTML formatting
 and HTTP serving -- everything except the user interface.
 """
 
-import sys
-import json
-import glob
 import time
-import pkgutil
-import argparse
-import datetime
-import threading
 import urllib.parse
-from pathlib import Path
-from os import path
 
 if __package__ == "fitbrowser":
-    from . import activity
+    from . import fitact
+    from . import fitbgfo
     from . import fithttp
     from . import fitconfig
     from . import fitgeo
     from . import fithtml
 else:
-    import activity
+    import fitact
+    import fitbgfo
     import fithttp
     import fitconfig
     import fitgeo
@@ -91,172 +84,6 @@ class ConsoleDownloadStatistics:
     def oops(self, message):
         print(message)
 
-class BgFileOpener:
-    def __init__(self, files, callback=None):
-        self.files = files
-        self.activities = None
-        self.success = False
-        self.thread = None
-        self.callback = callback
-        self.canceled = False
-        self.running = True
-        self.thread = threading.Thread(target=self.openActivities)
-        self.thread.start()
-        
-    def __del__(self):
-        self.close()
-
-    def __bool__(self):
-        return self.success
-
-    @property
-    def done(self):
-        return not self.running
-
-    def get(self):
-        return self.activities
-
-    def cancel(self):
-        self.canceled = True
-
-    def close(self):
-        if self.thread and self.thread != threading.current_thread():
-            self.thread.join()
-            self.thread = None
-
-    def wait(self):
-        if self.running:
-            self.close()
-
-    def openFinished(self, success):
-        self.success = success
-        self.running = False
-
-    def openActivities(self):
-        try:
-            self.activities = activity.open_activities(self.files, self.callback)
-        except Exception as e:
-            self.openFinished(False)
-            return
-
-        self.openFinished(not self.canceled)
-
-class ActivitiesWrapper:
-    fileList = [
-        "activity.js",
-        "overview.js"
-    ]
-
-    def __init__(self, activities, groupedActivities, config, geoLocator):
-        self.config = config
-        self.activities = activities
-        self.groupedActivities = groupedActivities
-        self.htmlFormatter = fithtml.FitHtmlFormatter(
-            self.config["html"],
-            activities,
-            groupedActivities,
-            geoLocator,
-            self.config["groupRadiusKm"],
-            self.config["googleMaps"]["enable"])
-        self.files = dict()
-        for fileName in ActivitiesWrapper.fileList:
-            self.loadFile(fileName)
-
-    def loadFile(self, fileName):
-        if "fitbrowser" in sys.modules:
-            self.files[fileName] = pkgutil.get_data("fitbrowser", fileName)
-        else:
-            filePath = path.abspath(path.join(path.dirname(__file__), fileName))
-            with open(filePath, "rb") as fileFile:
-                self.files[fileName] = fileFile.read()
-
-    def getTimestampFromName(self, name):
-        if ((len(name) >= 2) and (name[0] == "/")):
-            name = name[1:]
-        if name.startswith("activity/"):
-            name = name[9:]
-        lastDot = name.rfind(".")
-        if lastDot == -1:
-            return None
-        ext = name[lastDot+1:]
-        try:
-            return self.activities.parse_timestamp(name[:lastDot])
-        except:
-            return None
-
-    def copyActivityJson(self, timestamp, outputFile):
-        activity = self.activities[timestamp]
-
-        summary = activity.summary()
-        records = activity.records()
-        pauses = activity.pauses()
-
-        data = {
-            'sport': summary['sport'],
-            'records': records,
-            'pauses': pauses,
-            'elevation': {'ascent': summary['ascent'], 'descent': summary['descent']},
-        }
-
-        binData = json.dumps(data, indent=2).encode("utf-8")
-        outputFile.write(binData)
-
-    def hasFile(self, name):
-        if ((len(name) >= 2) and (name[0] == "/")):
-            name = name[1:]
-        if name in self.files:
-            return True
-        elif self.htmlFormatter.hasFile(name):
-            return True
-        elif name.endswith("gmapikey.json"):
-            return True
-        elif name.endswith("index.json"):
-            return True
-        elif name.startswith("activity/"):
-            timestamp = self.getTimestampFromName(name)
-            if timestamp is None:
-                return False
-            haveTimestamp = timestamp in self.activities
-            isHtml = name.endswith(".html")
-            isJson = name.endswith(".json")
-            return haveTimestamp and (isHtml or isJson)
-        else:
-            return False
-
-    def makeGmApiKeyJson(self, outputFile):
-        data = '{ "key": "' + self.config["googleMaps"]["apiKey"] + '" }'
-        outputFile.write(data.encode())
-
-    def makeActivityMarkersJson(self, outputFile):
-        markers = []
-        for group in self.groupedActivities:
-            marker = group.describe()
-            marker["url"] = f'/location/{group.lat:.5f},{group.lng:.5f}.html'
-            markers.append(marker)
-        binData = json.dumps(markers, indent=2).encode("utf-8")
-        outputFile.write(binData)
-
-    def copyFile(self, name, outputFile, updatecb=None):
-        if ((len(name) >= 2) and (name[0] == "/")):
-            name = name[1:]
-        if name in self.files:
-            outputFile.write(self.files[name])
-        elif self.htmlFormatter.hasFile(name):
-            self.htmlFormatter.copyFile(name, outputFile)
-        elif name.endswith("gmapikey.json"):
-            self.makeGmApiKeyJson(outputFile)
-        elif name.endswith("index.json"):
-            self.makeActivityMarkersJson(outputFile)
-        elif name.startswith("activity/"):
-            timestamp = self.getTimestampFromName(name)
-            isHtml = name.endswith(".html")
-            isJson = name.endswith(".json")
-
-            if isHtml:
-                self.copyActivityHtml(timestamp, outputFile)
-            else:
-                self.copyActivityJson(timestamp, outputFile)
-
 class HttpHtmlGlue:
     """
     This class is the glue between the message container, which stores messages,
@@ -264,15 +91,15 @@ class HttpHtmlGlue:
     HTML, and the HTTP request handler, wich serves requests from the HTTP server.
     """
 
-    def __init__(self, activitiesWrapper):
-        self.activitiesWrapper = activitiesWrapper
+    def __init__(self, resourceGenerator):
+        self.resourceGenerator = resourceGenerator
         self.statisticsCollector = QuietDownloadStatistics()
 
     def setStatisticsCollector(self, collector):
         self.statisticsCollector = collector
 
-    def getHttpHeaders(self, path):
-        path = urllib.parse.unquote(path)
+    def getHttpHeaders(self, httpPath):
+        path = urllib.parse.unquote(httpPath)
         if path == "/":
             return 301, {"Location": "index.html"}
 
@@ -283,12 +110,12 @@ class HttpHtmlGlue:
         contentType = self.getContentTypeFromFileName(path)
         return 200, {"Content-Type": contentType}
 
-    def getFile(self, path, wfile):
-        path = urllib.parse.unquote(path)
+    def getFile(self, httpPath, wfile):
+        path = urllib.parse.unquote(httpPath)
         updatecb = self.statisticsCollector.start(path)
         try:
-            if self.activitiesWrapper.hasFile(path):
-                self.activitiesWrapper.copyFile(path, wfile, updatecb)
+            if self.resourceGenerator.hasFile(path):
+                self.resourceGenerator.copyFile(path, wfile, updatecb)
             else:
                 updatecb.finish(False)
                 raise Exception("Oops: \"" + path + "\".")
@@ -299,7 +126,7 @@ class HttpHtmlGlue:
             updatecb.finish(False)
 
     def hasFile(self, path):
-        if self.activitiesWrapper.hasFile(path):
+        if self.resourceGenerator.hasFile(path):
             return True
         return False
 
@@ -340,15 +167,13 @@ class App:
         self.running = False
         self.unfilteredActivities = None
         self.filteredActivities = None
-        self.groupedActtivities = None
+        self.groupedActivities = None
         self.httpHtmlGlue = None
         self.httpServerManager = None
         self.httpBackend = None
         self.statisticsCollector = None
-        self.activitiesWrapper = None
-        self.title = None
+        self.resourceGenerator = None
         self.config = fitconfig.FitConfig(useConfigFile, configFile)
-        self.geoLocator = fitgeo.NearestCity(self.config)
 
     def __del__(self):
         self.stop()
@@ -367,22 +192,20 @@ class App:
     def configure(self, configData):
         self.config.load()
         self.config.merge(configData)
-        self.geoLocator = fitgeo.NearestCity(self.config)
 
     def updateConfiguration(self):
-        self.geoLocator = fitgeo.NearestCity(self.config)
         self.config.save()
 
     def open(self, files):
-        activities = activity.open_activities(files)
+        activities = fitact.open_activities(files)
         self.setActivities(activities)
 
     def setActivities(self, activities):
         self.stop()
         self.filteredActivities = None
         self.unfilteredActivities = activities
-        self.groupedActivities = activity.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
-        
+        self.groupedActivities = fitact.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
+
     def close(self):
         self.stop()
         self.filteredActivities = None
@@ -392,8 +215,8 @@ class App:
     def filterByDateRange(self, fromDate, toDate):
         if not fromDate and not toDate:
             self.resetFilter()
-        self.filteredActivities = activity.ActivitiesFilteredByDate(self.activities, fromDate, toDate)
-        self.groupedActivities = activity.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
+        self.filteredActivities = fitact.ActivitiesFilteredByDate(self.activities, fromDate, toDate)
+        self.groupedActivities = fitact.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
 
     def currentDateRangeFilter(self):
         if not self.filteredActivities:
@@ -402,14 +225,14 @@ class App:
 
     def resetFilter(self):
         self.filteredActivities = None
-        self.groupedActivities = activity.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
+        self.groupedActivities = fitact.ActivitiesGroupedByLocation(self.activities, self.config["groupRadiusKm"])
 
     def startHttpServer(self):
         if self.httpServerManager:
             return
-        self.geoLocator = fitgeo.NearestCity(self.config)
-        self.activitiesWrapper = ActivitiesWrapper(self.activities, self.groupedActivities, self.config, self.geoLocator)
-        self.httpBackend = HttpHtmlGlue(self.activitiesWrapper)
+        geoLocator = fitgeo.NearestCity(self.config)
+        self.resourceGenerator = fithtml.ResourceGenerator(self.activities, self.groupedActivities, self.config, geoLocator)
+        self.httpBackend = HttpHtmlGlue(self.resourceGenerator)
         if self.statisticsCollector:
             self.httpBackend.setStatisticsCollector(self.statisticsCollector)
         self.httpServerManager = fithttp.FitHttpServerManager(self.httpBackend)
@@ -429,36 +252,50 @@ class App:
         self.running = False
         self.updateConfiguration()
 
-class ConsoleFileOpener(BgFileOpener):
+class ConsoleFileOpener(fitbgfo.BgFilesOpener):
+    """
+    Halper class to open activity files in the background, showing progress
+    on the console.
+    """
+
     updatePeriodMs = 200
 
     def __init__(self, files, verbosity):
         self.verbosity = verbosity
-        self.count = 0
+        self.fileCount = 0
+        self.totalCount = 0
         self.lastActivity = time.time()
+        self.currentFile = None
+        super().__init__(files, self.activityLoaded, self.fileLoaded)
+
+    def fileLoaded(self, fileName, isFinished):
+        self.currentFile = fileName
         if self.verbosity > 0:
-            print("Loading activities ... ", end="\r", flush=True)
-        super().__init__(files, self.activityLoaded)
+            if not isFinished:
+                self.fileCount = 0
+                print(f"Loading \"{self.currentFile}\" ... {self.fileCount} ", end="\r", flush=True)
+            else:
+                self.totalCount += self.fileCount
+                print(f"Loading \"{self.currentFile}\" ... done, {self.fileCount} activities loaded.")
 
     def activityLoaded(self, activity):
-        self.count += 1
+        self.fileCount += 1
         if self.verbosity > 1:
             now = time.time()
             if ((now - self.lastActivity) * 1000) >= ConsoleFileOpener.updatePeriodMs:
-                print(f"Loading activities ... {self.count} ", end="\r", flush=True)
+                print(f"Loading \"{self.currentFile}\" ... {self.fileCount} ", end="\r", flush=True)
                 self.lastActivity = now
 
-    def done(self):
-        if self.verbosity > 0:
-            print(f"Loading activities ... done, {self.count} activities loaded.")
+    def finish(self):
+        if self.verbosity > 0 and self.fileCount != self.totalCount:
+            print(f"Loaded {self.totalCount} activities.")
 
 #
 # Allow to run from the command line.
 #
 
-def run(activityFiles=None, title=None, useConfigFile=True, configFile=None, verbosity=0):
+def run(activityFiles=None, useConfigFile=True, configFile=None, verbosity=0):
     # pylint: disable=import-outside-toplevel
-    import time
     if activityFiles is None or len(activityFiles) == 0:
         raise Exception("No activity files provided.")
     app = App(useConfigFile, configFile)
@@ -466,11 +303,9 @@ def run(activityFiles=None, title=None, useConfigFile=True, configFile=None, ver
         app.setStatisticsCollector(ConsoleDownloadStatistics())
     cfo = ConsoleFileOpener(activityFiles, verbosity)
     cfo.wait()
-    cfo.done()
+    cfo.finish()
     activities = cfo.get()
     app.setActivities(activities)
-    if title:
-        app.title = title
     app.start()
     print("Running at \"" + app.url + "\".")
     try:

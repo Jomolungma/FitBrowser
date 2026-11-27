@@ -44,7 +44,6 @@ and activity_summary.py (summary of every activity in a file).
 
 import os
 import sys
-import json
 import math
 import re
 import base64
